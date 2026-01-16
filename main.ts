@@ -1,22 +1,24 @@
 
 import TinySDF, { TinySDFOptions } from '@mapbox/tiny-sdf';
+import { Actor, Color, Engine, ImageSource, vec } from 'excalibur';
 
 export interface SDFFontOptions {
+  fontFile: string; // ttf file
   /*
    * Default 100
    */
-  fontWeight: number | undefined;
+  fontWeight?: number;
   /**
    * Default 'normal'
    */
-  fontStyle: string | undefined;
-  fontFile: string; // ttf file
-  alphabet: string; // string of glyphs you wish to support in the sdf
+  fontStyle?: string;
+  alphabet?: string; // string of glyphs you wish to support in the sdf
+  fontSize?: number;
   // These are from TinySDF
-  size: number;
-  halo: number;
-  angle: number;
-  gamma: number
+  // size: number;
+  // halo: number;
+  // angle: number;
+  // gamma: number
 }
 
 export interface Glyph {
@@ -38,6 +40,7 @@ export class SDFFont {
 
   // codepoint to Glyph info
   glyphs: Map<string, Glyph> = new Map();
+  glyphAtlasLocation: Map<string, {x: number, y: number}> = new Map();
 
   private __tinySdf: TinySDF;
 
@@ -48,11 +51,17 @@ export class SDFFont {
     if (!this.atlasCtx) throw new Error("Cannot Build SDF Font Atlas Context");
 
 
-    const fontSize = options.size;
+    const fontSize = options.fontSize ?? 16;
     const fontWeight = options.fontWeight?.toString() ?? '100'; // TODO default
     const fontStyle = options.fontStyle ?? 'normal';
+    const alphabet = options.alphabet ?? 'abcdefghijklmnopqrstuvwxyz~!@#$%^&*\(\)<>?\'\":;ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890{}\\|';
     const buffer = Math.ceil(fontSize / 8);
     const radius = Math.ceil(fontSize / 3);
+
+    const size = fontSize + buffer * 2;
+    const dimension = Math.ceil(Math.sqrt(alphabet.length)) * size;
+    this.atlasCanvas.width = dimension;
+    this.atlasCanvas.height = dimension;
 
     // TinySDF generator
     this.__tinySdf = new TinySDF({
@@ -65,23 +74,28 @@ export class SDFFont {
     } satisfies TinySDFOptions);
 
     // Generate sdf atlas data
-    for (const codePoint of this.options.alphabet) {
+    for (const codePoint of alphabet) {
       this.glyphs.set(codePoint, this.__tinySdf.draw(codePoint));
     }
 
     // Build atlas
-    const size = fontSize + buffer * 2;
     const codePoints = Array.from(this.glyphs.entries());
     const codePointsLength = codePoints.length
     let i = 0;
     let [codePoint, glyph] = codePoints[i];
-    for (let y = 0; y + size <= this.atlasCanvas.height && i < codePointsLength; y += size) {
-      for (let x = 0; x + size <= this.atlasCanvas.width && i < codePointsLength; x += size) {
+    let currentSize = Math.max(glyph.width, glyph.height);
+    for (let y = 0; y + currentSize <= this.atlasCanvas.height && i < codePointsLength; y += currentSize) {
+      for (let x = 0; x + currentSize <= this.atlasCanvas.width && i < codePointsLength; x += currentSize) {
         const { data, width, height } = glyph;
+        currentSize = Math.max(glyph.width, glyph.height);
+        // build atlas and stash info
         this.atlasCtx.putImageData(this._makeRGBAImageData(data, width, height), x, y);
-        // sdfs[codePoint.value] = {x, y};
-        i++;
-        [codePoint, glyph] = codePoints[i]
+        this.glyphAtlasLocation.set(codePoint, {x, y});
+        // next iter
+        i++
+        if (codePoints[i]) {
+          [codePoint, glyph] = codePoints[i]
+        }
       }
     }
   }
@@ -98,24 +112,83 @@ export class SDFFont {
   }
 
   async load() {
-
+    // TODO load the font file with the excalibur font loader 
 
   }
 }
 
 
+// export interface SDFTextOptions {
+//   sdfFont: SDFFont;
+//   text: string;
+// }
+//
+// export class SDFText {
+//   constructor(options: SDFTextOptions) {
+//   }
+// }
+//
 
-export interface SDFTextOptions {
-  sdfFont: SDFFont;
-  text: string;
-}
+const glsl = tags => tags[0];
 
-export class SDFText {
-  constructor(options: SDFTextOptions) {
+const sdf = new SDFFont({
+  fontFile: './static/Roboto-Regular.ttf',
+  fontWeight: 100,
+  fontSize: 30,
+  // alphabet: 'abcd'
+});
+
+document.body.appendChild(sdf.atlasCanvas);
+
+const game = new Engine({
+  width: 800,
+  height: 800
+
+});
+
+await game.start();
+
+const textAtlas = ImageSource.fromHtmlCanvasElement(sdf.atlasCanvas);
+await textAtlas.ready;
+
+const textActor = new Actor({
+  width: 500,
+  height: 100,
+  color: Color.Red,
+  pos: vec(400, 400)
+});
+textActor.graphics.material = game.graphicsContext.createMaterial({
+  name: 'text',
+  color: Color.Red,
+  fragmentSource: glsl`#version 300 es
+    precision mediump float;
+
+    uniform float u_time_ms;
+    uniform vec4 u_color;
+    uniform float u_buffer;
+    uniform float u_gamma;
+    uniform sampler2D u_graphic;
+    uniform sampler2D u_text_atlas;
+
+    in vec2 v_uv;
+    in vec2 v_screenuv;
+    out vec4 fragColor;
+    void main() {
+      float dist = texture(u_text_atlas, v_uv).r;
+      fragColor = vec4(vec3(dist), 1.0);
+      // float alpha = smoothstep(u_buffer - u_gamma, u_buffer + u_gamma, dist);
+      // fragColor = vec4(u_color.rgb, alpha * u_color.a);
+      // fragColor.rgb *= fragColor.a;
+    }
+  `,
+  uniforms: {
+    u_gamma: 2,
+    u_buffer: .55
+  },
+  images: {
+    u_text_atlas: textAtlas // TODO add ready check
   }
-}
 
-
-
-
+});
+game.add(textActor);
 

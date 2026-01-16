@@ -11,12 +11,19 @@
   "license": "BSD-2-Clause",
   "author": "Erik Onarheim",
   "type": "esm",
-  "main": "main.ts",
   "scripts": {
+    "dev": "vite",
+    "start": "vite",
+    "build": "tsc && vite build",
+    "serve": "vite preview",
     "test": "npm run test"
   },
   "dependencies": {
     "@mapbox/tiny-sdf": "2.0.7",
     "excalibur": "0.32.0"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3",
+    "vite": "7.3.1"
   }
 }
