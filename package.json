@@ -1,0 +1,22 @@
+{
+  "name": "@excaliburjs/sdf-text",
+  "version": "0.33.0",
+  "description": "SDF Text Rendering and Atlas Generation",
+  "keywords": [
+    "sdf",
+    "text",
+    "excalibur",
+    "excaliburjs"
+  ],
+  "license": "BSD-2-Clause",
+  "author": "Erik Onarheim",
+  "type": "esm",
+  "main": "main.ts",
+  "scripts": {
+    "test": "npm run test"
+  },
+  "dependencies": {
+    "@mapbox/tiny-sdf": "2.0.7",
+    "excalibur": "0.32.0"
+  }
+}
