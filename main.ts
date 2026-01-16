@@ -152,8 +152,8 @@ const textAtlas = ImageSource.fromHtmlCanvasElement(sdf.atlasCanvas);
 await textAtlas.ready;
 
 const textActor = new Actor({
-  width: 500,
-  height: 100,
+  width: 400,
+  height: 400,
   color: Color.Red,
   pos: vec(400, 400)
 });
@@ -175,15 +175,15 @@ textActor.graphics.material = game.graphicsContext.createMaterial({
     out vec4 fragColor;
     void main() {
       float dist = texture(u_text_atlas, v_uv).r;
-      fragColor = vec4(vec3(dist), 1.0);
-      // float alpha = smoothstep(u_buffer - u_gamma, u_buffer + u_gamma, dist);
-      // fragColor = vec4(u_color.rgb, alpha * u_color.a);
-      // fragColor.rgb *= fragColor.a;
+      // fragColor = vec4(vec3(dist), 1.0);
+      float alpha = smoothstep(u_buffer - u_gamma, u_buffer + u_gamma, dist);
+      fragColor = vec4(u_color.rgb, alpha * u_color.a);
+      fragColor.rgb *= fragColor.a;
     }
   `,
   uniforms: {
-    u_gamma: 2,
-    u_buffer: .55
+    u_gamma: .15,
+    u_buffer: .65
   },
   images: {
     u_text_atlas: textAtlas // TODO add ready check
