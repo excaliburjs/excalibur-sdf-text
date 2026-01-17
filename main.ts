@@ -499,11 +499,11 @@ export class SDFTextRenderer implements RendererPlugin {
     const vertexBuffer = this._layout.vertexBuffer.bufferData;
 
     let pen = pos.clone();
-    for (let i = 0; i < text.length; i++) {
+    // for of is correct to iterate on emoji code points, index acess does not wor
+    for (const char of text) {
       if (this._isFull()) {
         this.flush();
       }
-      const char = text[i]
       const glyph = font.glyphs.get(char);
       const glyphPos = font.glyphAtlasLocation.get(char);
       if (!glyph || !glyphPos) continue;
