@@ -472,7 +472,7 @@ export class SDFTextRenderer implements RendererPlugin {
   private _sdfHalo: number = .75;
   private _defaultColor = Color.Black;
 
-  draw(font: SDFFont, text: string, pos: Vector, size: number, color?: Color): void {
+  draw(font: SDFFont, text: string, pos: Vector, size: number, charactersVisible: number = Infinity, color?: Color): void {
     // Force a render if the batch is full
     if (this._isFull()) {
       this.flush();
@@ -499,11 +499,15 @@ export class SDFTextRenderer implements RendererPlugin {
     const vertexBuffer = this._layout.vertexBuffer.bufferData;
 
     let pen = pos.clone();
+    let currentIndex = 0;
     // for of is correct to iterate on emoji code points, index acess does not wor
     for (const char of text) {
+      if (currentIndex >= charactersVisible) break;
+
       if (this._isFull()) {
         this.flush();
       }
+      currentIndex++;
       const glyph = font.glyphs.get(char);
       const glyphPos = font.glyphAtlasLocation.get(char);
       if (!glyph || !glyphPos) continue;
@@ -667,12 +671,21 @@ export class SDFTextRenderer implements RendererPlugin {
 export interface SDFTextOptions {
   sdfFont: SDFFont;
   size: number;
+  visibleCharacters: number;
   color?: Color;
   text: string;
 }
 export class SDFText extends Graphic {
   constructor(private options: SDFTextOptions) {
     super(); // TODO super GraphicsOptions support
+  }
+
+  get visibleCharacters() {
+    return this.options.visibleCharacters;
+  }
+
+  set visibleCharacters(val: number) {
+    this.options.visibleCharacters = val;
   }
 
   protected _drawImage(ex: ExcaliburGraphicsContext, x: number, y: number): void {
@@ -683,6 +696,7 @@ export class SDFText extends Graphic {
         this.options.text,
         vec(x, y),
         this.options.size,
+        this.options.visibleCharacters,
         this.options.color
       );
     }
@@ -759,18 +773,26 @@ textActor.graphics.material = game.graphicsContext.createMaterial({
 });
 game.add(textActor);
 
+const sdfText = new SDFText({
+  sdfFont,
+  color: Color.Purple,
+  text: '🎉🎂Hello SDF Text! ◑﹏◐ !',
+  visibleCharacters: 0,
+  size: 32
+});
+
 const sdfActor = new Actor({
   pos: vec(100, 100),
   width: 100,
   height: 100,
-  graphic: new SDFText({
-    sdfFont,
-    color: Color.Purple,
-    text: '🎉🎂Hello SDF Text! ◑﹏◐ !',
-    size: 32
-  }),
+  graphic: sdfText
 });
 game.add(sdfActor);
+setInterval(() => {
+  sdfText.visibleCharacters++;
+}, 200);
+
+
 
 // Add visible glyphs
 // TODO text effects
