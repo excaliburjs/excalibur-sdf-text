@@ -124,7 +124,7 @@ export class SDFFont {
     this._fontSize = options.fontSize ?? this._fontSize;
     const fontWeight = options.fontWeight?.toString() ?? '100'; // TODO default
     const fontStyle = options.fontStyle ?? 'normal';
-    const alphabet = options.alphabet ?? ' abcdefghijklmnopqrstuvwxyz~!@#$%^&*\(\)<>?\'\":;ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890{}\\|';
+    const alphabet = options.alphabet ?? '🎶🎉🎂❤️◑﹏◐ abcdefghijklmnopqrstuvwxyz~!@#$%^&*\(\)<>?\'\":;ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890{}\\|';
 
     const buffer = Math.ceil(fontSize / 8);
     this._buffer = buffer;
@@ -155,23 +155,31 @@ export class SDFFont {
     }
 
     // Build atlas
-    const codePoints = Array.from(this.glyphs.entries());
-    const codePointsLength = codePoints.length
-    let i = 0;
-    let [codePoint, glyph] = codePoints[i];
-    let currentSize = Math.max(glyph.width, glyph.height);
-    for (let y = 0; y + size <= this.atlasCanvas.height && i < codePointsLength; y += size) {
-      for (let x = 0; x + size <= this.atlasCanvas.width && i < codePointsLength; x += size) {
+    // This is goofy but it's the best way to support unicode/emojis in a string
+    const codePoints = alphabet[Symbol.iterator]();
+    let nextCodePoint = codePoints.next();
+    if (nextCodePoint?.done) return;
+
+    let currentSize = 0;
+    let maxHeight = 0;
+
+    for (let y = 0; y + maxHeight <= this.atlasCanvas.height && !nextCodePoint.done; y += maxHeight) {
+      maxHeight = 0;
+      for (let x = 0; x + currentSize <= this.atlasCanvas.width && !nextCodePoint.done; x += currentSize) {
+        let codePoint = nextCodePoint.value;
+        let glyph = this.glyphs.get(codePoint)!;
         const { data, width, height } = glyph;
-        currentSize = Math.max(glyph.width, glyph.height);
+
+        // advance in the atlas
+        currentSize = glyph.width;
+        maxHeight = Math.max(maxHeight, glyph.height);
+
         // build atlas and stash info
         this.atlasCtx.putImageData(this._makeRGBAImageData(data, width, height), x, y);
         this.glyphAtlasLocation.set(codePoint, { x, y });
+
         // next iter
-        i++
-        if (codePoints[i]) {
-          [codePoint, glyph] = codePoints[i]
-        }
+        nextCodePoint = codePoints.next();
       }
     }
   }
@@ -231,7 +239,7 @@ export class SDFFont {
     return new BoundingBox();
 
     // TODO this needs to be loaded first I think
-    
+
     // const lines = this._getLinesFromText(text, maxWidth);
     // const maxWidthLine = lines.reduce((a, b) => {
     //   return a.length > b.length ? a : b;
@@ -478,7 +486,7 @@ export class SDFTextRenderer implements RendererPlugin {
     }
 
     if (!color) {
-      color = this._defaultColor;
+      color = font.color ?? this._defaultColor;
     }
 
     // This creates and uploads the texture if not already done
@@ -535,7 +543,7 @@ export class SDFTextRenderer implements RendererPlugin {
 
       // advnace pen
       pen.x += glyph.glyphAdvance * scale;
-      // FIXME max width new row
+      // FIXME max width or newline new row
       // pen.y += 
 
       transform.multiplyQuadInPlace(this._quad);
@@ -758,7 +766,7 @@ const sdfActor = new Actor({
   graphic: new SDFText({
     sdfFont,
     color: Color.Purple,
-    text: 'Hello SDF Text!',
+    text: '🎉🎂Hello SDF Text! ◑﹏◐ !',
     size: 32
   }),
 });
