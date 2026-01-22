@@ -588,9 +588,11 @@ export class SDFTextRenderer implements RendererPlugin {
       }
       currentIndex++;
 
+      const scale = size / font.fontSize;
+
       if (char === '\n') {
         pen.x = 0;
-        pen.y += font.fontSize;
+        pen.y += size;
       }
 
       const glyph = font.glyphs.get(char);
@@ -602,11 +604,9 @@ export class SDFTextRenderer implements RendererPlugin {
       const sw = glyph.width;
       const sh = glyph.height;
 
-      const scale = size / font.fontSize; // TODO calculate this from font size?
 
       const baseline = font.fontSize / 2 + font.buffer;
 
-      // TODO for each glyph add a quad
       this._imageCount++;
 
       // generate geometry
@@ -795,8 +795,10 @@ const glsl = tags => tags[0];
 const sdfFont = new SDFFont({
   // fontFile: './static/Roboto-Regular.ttf',
   // fontFamily: 'Roboto',
-  fontFile: './static/PixelifySans-Regular.ttf',
-  fontFamily: 'PixelifySans',
+  // fontFile: './static/PixelifySans-Regular.ttf',
+  // fontFamily: 'PixelifySans',
+  fontFile: './static/JetBrainsMono-Regular.ttf',
+  fontFamily: 'JetBrainsMono',
   fontWeight: 100,
   fontSize: 100
 });
@@ -860,9 +862,9 @@ await game.start(new Loader([sdfFont]));
 const sdfText = new SDFText({
   sdfFont,
   color: Color.Purple,
-  text: '"{}^$@Hello\n SDF \nText!!@', // TODO quotes dont render in the correct spot
+  text: '"{}^$@Hello\nSDF\nText!!@',
   visibleCharacters: 0,
-  size: 100
+  size: 100 
 });
 
 const sdfActor = new Actor({
@@ -876,10 +878,8 @@ setInterval(() => {
   sdfText.visibleCharacters++;
 }, 200);
 
-// Add visible glyphs
 // TODO text effects
 // TODO support ansi codes for colors???
-// TODO handle newlines
 // TODO handle measureText
 
 document.body.appendChild(sdfFont.atlasCanvas);
