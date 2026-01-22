@@ -266,6 +266,11 @@ export class SDFFont implements Loadable<HTMLCanvasElement> {
   }
 
   public measureText(text: string, maxWidth?: number): BoundingBox {
+    if (!this.isLoaded()) {
+      throw new Error(`Cannot measureText(${text}) on a font [${this._fontFile}] that is not loaded.`)
+
+
+    }
     return new BoundingBox();
 
     // TODO this needs to be loaded first I think
@@ -786,6 +791,7 @@ export class SDFText extends Graphic {
   }
 
   clone(): Graphic {
+    // TODO
     throw new Error('Method not implemented.');
   }
 
@@ -799,6 +805,7 @@ const sdfFont = new SDFFont({
   // fontFamily: 'PixelifySans',
   fontFile: './static/JetBrainsMono-Regular.ttf',
   fontFamily: 'JetBrainsMono',
+  alphabet: [[0x0020, 0x00FF]],
   fontWeight: 100,
   fontSize: 100
 });
@@ -861,7 +868,7 @@ await game.start(new Loader([sdfFont]));
 
 const sdfText = new SDFText({
   sdfFont,
-  color: Color.Purple,
+  // color: Color.Purple,
   text: '"{}^$@Hello\nSDF\nText!!@',
   visibleCharacters: 0,
   size: 100 
@@ -878,8 +885,6 @@ setInterval(() => {
   sdfText.visibleCharacters++;
 }, 200);
 
-// TODO text effects
-// TODO support ansi codes for colors???
 // TODO handle measureText
 
 document.body.appendChild(sdfFont.atlasCanvas);
