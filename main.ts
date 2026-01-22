@@ -11,6 +11,8 @@ import {
   Graphic,
   HTMLImageSource,
   ImageSourceAttributeConstants,
+  Loadable,
+  Loader,
   parseImageFiltering,
   parseImageWrapping,
   QuadIndexBuffer,
@@ -102,16 +104,29 @@ export function getCharactersFromRanges(ranges: CodePointRange[]) {
   ).join('');
 }
 
-export class SDFFont {
+export class SDFFont implements Loadable<HTMLCanvasElement> {
   atlasCanvas: HTMLCanvasElement;
   atlasCtx: CanvasRenderingContext2D;
 
+  get data() {
+    return this.atlasCanvas;
+  }
+
+  private _isLoaded = false;
+  isLoaded(): boolean {
+    return this._isLoaded;
+  }
+
   /**
    * Codepoint to SDF Glyph info
+   *
+   * Readonly
    */
   glyphs: Map<string, SDFGlyph> = new Map();
   /**
    * Codepoint to SDF atlas coordinates
+   *
+   * Readonly
    */
   glyphAtlasLocation: Map<string, { x: number, y: number }> = new Map();
 
@@ -270,10 +285,11 @@ export class SDFFont {
     // return BoundingBox.fromDimension(width * this.scale.x, height * lines.length * this.scale.y, Vector.Zero);
   }
 
-  async load() {
+  async load(): Promise<HTMLCanvasElement> {
+    if (this._isLoaded) return this.atlasCanvas;
     // TODO load the font file with the excalibur font loader 
     const fontFile = new FontSource(this._fontFile, this._fontFamily);
-    const fontFace = await fontFile.load();
+    await fontFile.load();
 
     // TinySDF generator
     this.__tinySdf = new TinySDF({
@@ -294,7 +310,7 @@ export class SDFFont {
     // This is goofy but it's the best way to support unicode/emojis in a string
     const codePoints = this._alphabet[Symbol.iterator]();
     let nextCodePoint = codePoints.next();
-    if (nextCodePoint?.done) return;
+    if (nextCodePoint?.done) throw new Error(`SDFFont Invalid alphabet: [${this._alphabet}]`);
 
     let currentSize = 0;
     let maxHeight = 0;
@@ -319,6 +335,8 @@ export class SDFFont {
       }
     }
 
+    this._isLoaded = true;
+    return this.atlasCanvas!;
   }
 }
 
@@ -569,6 +587,12 @@ export class SDFTextRenderer implements RendererPlugin {
         this.flush();
       }
       currentIndex++;
+
+      if (char === '\n') {
+        pen.x = 0;
+        pen.y += font.fontSize;
+      }
+
       const glyph = font.glyphs.get(char);
       const glyphPos = font.glyphAtlasLocation.get(char);
       if (!glyph || !glyphPos) continue;
@@ -582,13 +606,12 @@ export class SDFTextRenderer implements RendererPlugin {
 
       const baseline = font.fontSize / 2 + font.buffer;
 
-
       // TODO for each glyph add a quad
       this._imageCount++;
 
       // generate geometry
       this._dest[0] = pen.x;
-      this._dest[1] = pen.y - (glyph.height - baseline) * scale;
+      this._dest[1] = pen.y - (glyph.glyphHeight - baseline) * scale - (glyph.glyphTop - glyph.glyphHeight) * scale;
 
       // top left
       this._quad[0] = this._dest[0];
@@ -608,8 +631,6 @@ export class SDFTextRenderer implements RendererPlugin {
 
       // advnace pen
       pen.x += glyph.glyphAdvance * scale;
-      // FIXME max width or newline new row
-      // pen.y += 
 
       transform.multiplyQuadInPlace(this._quad);
 
@@ -789,8 +810,7 @@ const game = new Engine({
 // TODO plugin system
 (game.graphicsContext as ExcaliburGraphicsContextWebGL).lazyRegister("ex.sdf-text-renderer", () => new SDFTextRenderer());
 
-await game.start();
-await sdfFont.load();
+await game.start(new Loader([sdfFont]));
 
 
 // const textAtlas = ImageSource.fromHtmlCanvasElement(sdfFont.atlasCanvas);
@@ -840,7 +860,7 @@ await sdfFont.load();
 const sdfText = new SDFText({
   sdfFont,
   color: Color.Purple,
-  text: '"{}^$@Hello SDF \nText!!@', // TODO quotes dont render in the correct spot
+  text: '"{}^$@Hello\n SDF \nText!!@', // TODO quotes dont render in the correct spot
   visibleCharacters: 0,
   size: 100
 });
