@@ -230,7 +230,7 @@ export class SDFFont implements Loadable<HTMLCanvasElement> {
   private _cachedText?: string;
   private _cachedLines?: string[];
   private _cachedRenderWidth?: number;
-  protected _getLinesFromText(text: string, maxWidth?: number) {
+  protected _getLinesFromText(text: string, size: number, maxWidth?: number) {
     if (this._cachedText === text && this._cachedRenderWidth === maxWidth && this._cachedLines?.length) {
       return this._cachedLines;
     }
@@ -246,8 +246,8 @@ export class SDFFont implements Loadable<HTMLCanvasElement> {
       let line = lines[i];
       let newLine = '';
       // Note: we subtract the spacing to counter the initial padding on the left side.
-      if (this.measureText(line).width > maxWidth) {
-        while (this.measureText(line).width > maxWidth) {
+      if (this.measureText(line, size).width > maxWidth) {
+        while (this.measureText(line, size).width > maxWidth) {
           newLine = line[line.length - 1] + newLine;
           line = line.slice(0, -1); // Remove last character from line
         }
@@ -265,33 +265,37 @@ export class SDFFont implements Loadable<HTMLCanvasElement> {
     return lines;
   }
 
-  public measureText(text: string, maxWidth?: number): BoundingBox {
+  public measureText(text: string, size: number, maxWidth?: number): BoundingBox {
     if (!this.isLoaded()) {
       throw new Error(`Cannot measureText(${text}) on a font [${this._fontFile}] that is not loaded.`)
     }
 
-    return new BoundingBox();
 
-    // TODO this needs to be loaded first I think
 
-    // const lines = this._getLinesFromText(text, maxWidth);
-    // const maxWidthLine = lines.reduce((a, b) => {
-    //   return a.length > b.length ? a : b;
-    // });
-    //
-    // const sprites = this._getCharacterSprites(maxWidthLine);
-    // let width = 0;
-    // let height = 0;
-    // for (const sprite of sprites) {
-    //   width += sprite.width + this.spacing;
-    //   height = Math.max(height, sprite.height);
-    // }
-    // return BoundingBox.fromDimension(width * this.scale.x, height * lines.length * this.scale.y, Vector.Zero);
+    const lines = this._getLinesFromText(text, size, maxWidth);
+    const maxWidthLine = lines.reduce((a, b) => {
+      return a.length > b.length ? a : b;
+    });
+    const glyphs: SDFGlyph[] = [];
+    for (let char of maxWidthLine) {
+      const maybeGlyph = this.glyphs.get(char);
+      if (maybeGlyph) {
+        glyphs.push(maybeGlyph);
+      }
+    }
+    let width = 0;
+    let height = 0;
+    const scale = size / this.fontSize;
+
+    for (const glyph of glyphs) {
+      width += glyph.glyphAdvance * scale;
+      height = Math.max(height, glyph.glyphHeight * scale);
+    }
+    return BoundingBox.fromDimension(width, height * lines.length, Vector.Zero);
   }
 
   async load(): Promise<HTMLCanvasElement> {
     if (this._isLoaded) return this.atlasCanvas;
-    // TODO load the font file with the excalibur font loader 
     const fontFile = new FontSource(this._fontFile, this._fontFamily);
     await fontFile.load();
 
@@ -762,6 +766,14 @@ export interface SDFTextOptions {
 }
 
 export class SDFText extends Graphic {
+  get text() {
+    return this.options.text;
+  }
+
+  set text(val: string) {
+    this.options.text = val;
+  }
+
   constructor(private options: SDFTextOptions) {
     super(); // TODO super GraphicsOptions support
   }
@@ -788,9 +800,10 @@ export class SDFText extends Graphic {
     }
   }
 
-  clone(): Graphic {
-    // TODO
-    throw new Error('Method not implemented.');
+  clone(): SDFText {
+    return new SDFText({
+      ...this.options
+    });
   }
 
 }
@@ -837,5 +850,7 @@ game.add(sdfActor);
 setInterval(() => {
   sdfText.visibleCharacters++;
 }, 200);
+
+console.log(sdfFont.measureText(sdfText.text, 100));
 
 document.body.appendChild(sdfFont.atlasCanvas);
