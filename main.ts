@@ -1,12 +1,37 @@
 
 import TinySDF, { TinySDFOptions } from '@mapbox/tiny-sdf';
-import { Actor, BoundingBox, Color, Engine, ExcaliburGraphicsContext, ExcaliburGraphicsContextWebGL, Graphic, HTMLImageSource, ImageSource, ImageSourceAttributeConstants, parseImageFiltering, parseImageWrapping, QuadIndexBuffer, RendererPlugin, Shader, vec, Vector, VertexBuffer, VertexLayout } from 'excalibur';
+import {
+  Actor,
+  BoundingBox,
+  Color,
+  Engine,
+  ExcaliburGraphicsContext,
+  ExcaliburGraphicsContextWebGL,
+  FontSource,
+  Graphic,
+  HTMLImageSource,
+  ImageSourceAttributeConstants,
+  parseImageFiltering,
+  parseImageWrapping,
+  QuadIndexBuffer,
+  RendererPlugin,
+  Shader,
+  vec,
+  Vector,
+  VertexBuffer,
+  VertexLayout,
+} from 'excalibur';
 
 import fragmentSource from './sdf-text.frag.glsl?raw';
 import vertexSource from './sdf-text.vert.glsl?raw';
 
+export type CodePointRange = [startCodePoint: number, endCodePoint: number];
+
 export interface SDFFontOptions {
   fontFile: string; // ttf file
+
+  fontFamily: string; // some name
+
   /**
    * Default black
    */
@@ -21,8 +46,10 @@ export interface SDFFontOptions {
   fontStyle?: string;
   /**
    * String of glyphs to bake into the sdf
+   *
+   * Default: ASCII printable characters (character code 32-127)
    */
-  alphabet?: string; // string of glyphs you wish to support in the sdf
+  alphabet?: string | CodePointRange[];
   /**
    * Intended font size for this sdf font
    *
@@ -66,13 +93,26 @@ export interface SDFGlyph {
   glyphAdvance: number;
 }
 
+export function getCharactersFromRanges(ranges: CodePointRange[]) {
+  return ranges.flatMap(([start, end]) =>
+    Array.from(
+      { length: end - start + 1 },
+      (_, i) => String.fromCodePoint(start + i)
+    )
+  ).join('');
+}
 
 export class SDFFont {
   atlasCanvas: HTMLCanvasElement;
   atlasCtx: CanvasRenderingContext2D;
 
-  // codepoint to Glyph info
+  /**
+   * Codepoint to SDF Glyph info
+   */
   glyphs: Map<string, SDFGlyph> = new Map();
+  /**
+   * Codepoint to SDF atlas coordinates
+   */
   glyphAtlasLocation: Map<string, { x: number, y: number }> = new Map();
 
   private __tinySdf: TinySDF;
@@ -82,6 +122,20 @@ export class SDFFont {
   private _size: number;
   private _buffer: number;
   private _radius: number;
+  private _fontWeight: string = '100';
+  private _fontStyle: string = 'normal';
+  private _fontFamily: string = 'sans-serif';
+
+  /**
+   * ASCII printable characters (character code 32-127)
+   */
+  private _alphabet: string = getCharactersFromRanges([
+    [0x0020, 0x007E], // Basic Latin
+    // [0x00A0, 0x00FF], // Latin-1 Supplement
+    // [0x0100, 0x017F], // Latin Extended-A;
+  ]);
+
+  private _fontFile: string;
 
   get gamma() {
     return 2 * 1.4142 / this._fontSize;
@@ -111,9 +165,7 @@ export class SDFFont {
     return this._radius;
   }
 
-
-
-  constructor(private options: SDFFontOptions) {
+  constructor(options: SDFFontOptions) {
     this.atlasCanvas = document.createElement('canvas');
     if (!this.atlasCanvas) throw new Error("Cannot Build SDF Font Atlas Canvas");
     this.atlasCtx = this.atlasCanvas.getContext('2d')!;
@@ -121,67 +173,30 @@ export class SDFFont {
 
     this._color = options.color ?? Color.Black;
 
-    this._fontSize = options.fontSize ?? this._fontSize;
-    const fontWeight = options.fontWeight?.toString() ?? '100'; // TODO default
-    const fontStyle = options.fontStyle ?? 'normal';
-    const alphabet = options.alphabet ?? '🎶🎉🎂❤️◑﹏◐ abcdefghijklmnopqrstuvwxyz~!@#$%^&*\(\)<>?\'\":;ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890{}\\|';
+    this._fontFile = options.fontFile;
+    this._fontFamily = options.fontFamily ?? this._fontFamily;
 
-    const buffer = Math.ceil(fontSize / 8);
+    this._fontSize = options.fontSize ?? this._fontSize;
+    this._fontWeight = options.fontWeight?.toString() ?? this._fontWeight;
+    this._fontStyle = options.fontStyle ?? this._fontStyle;
+    if (Array.isArray(options.alphabet)) {
+      this._alphabet = getCharactersFromRanges(options.alphabet);
+    } else {
+      this._alphabet = options.alphabet ?? this._alphabet;
+    }
+
+    const buffer = Math.ceil(this._fontSize / 8);
     this._buffer = buffer;
 
-    const radius = Math.ceil(fontSize / 3);
+    const radius = Math.ceil(this._fontSize / 3);
     this._radius = radius;
 
-    const size = fontSize + buffer * 2;
+    const size = this._fontSize + buffer * 2;
     this._size = size;
 
-    const dimension = Math.ceil(Math.sqrt(alphabet.length)) * size;
+    const dimension = Math.ceil(Math.sqrt(this._alphabet.length)) * size;
     this.atlasCanvas.width = dimension;
     this.atlasCanvas.height = dimension;
-
-    // TinySDF generator
-    this.__tinySdf = new TinySDF({
-      fontSize,
-      fontFamily: 'sans-serif', // TODO extract font family?
-      fontStyle,
-      fontWeight,
-      buffer,
-      radius,
-    } satisfies TinySDFOptions);
-
-    // Generate sdf atlas data
-    for (const codePoint of alphabet) {
-      this.glyphs.set(codePoint, this.__tinySdf.draw(codePoint));
-    }
-
-    // Build atlas
-    // This is goofy but it's the best way to support unicode/emojis in a string
-    const codePoints = alphabet[Symbol.iterator]();
-    let nextCodePoint = codePoints.next();
-    if (nextCodePoint?.done) return;
-
-    let currentSize = 0;
-    let maxHeight = 0;
-
-    for (let y = 0; y + maxHeight <= this.atlasCanvas.height && !nextCodePoint.done; y += maxHeight) {
-      maxHeight = 0;
-      for (let x = 0; x + currentSize <= this.atlasCanvas.width && !nextCodePoint.done; x += currentSize) {
-        let codePoint = nextCodePoint.value;
-        let glyph = this.glyphs.get(codePoint)!;
-        const { data, width, height } = glyph;
-
-        // advance in the atlas
-        currentSize = glyph.width;
-        maxHeight = Math.max(maxHeight, glyph.height);
-
-        // build atlas and stash info
-        this.atlasCtx.putImageData(this._makeRGBAImageData(data, width, height), x, y);
-        this.glyphAtlasLocation.set(codePoint, { x, y });
-
-        // next iter
-        nextCodePoint = codePoints.next();
-      }
-    }
   }
 
   private _makeRGBAImageData(alphaChannel: Uint8ClampedArray, width: number, height: number) {
@@ -257,6 +272,52 @@ export class SDFFont {
 
   async load() {
     // TODO load the font file with the excalibur font loader 
+    const fontFile = new FontSource(this._fontFile, this._fontFamily);
+    const fontFace = await fontFile.load();
+
+    // TinySDF generator
+    this.__tinySdf = new TinySDF({
+      fontSize: this._fontSize,
+      fontFamily: this._fontFamily,
+      fontStyle: this._fontStyle,
+      fontWeight: this._fontWeight,
+      buffer: this._buffer,
+      radius: this._radius,
+    } satisfies TinySDFOptions);
+
+    // Generate sdf atlas data
+    for (const codePoint of this._alphabet) {
+      this.glyphs.set(codePoint, this.__tinySdf.draw(codePoint));
+    }
+
+    // Build atlas
+    // This is goofy but it's the best way to support unicode/emojis in a string
+    const codePoints = this._alphabet[Symbol.iterator]();
+    let nextCodePoint = codePoints.next();
+    if (nextCodePoint?.done) return;
+
+    let currentSize = 0;
+    let maxHeight = 0;
+
+    for (let y = 0; y + maxHeight <= this.atlasCanvas.height && !nextCodePoint.done; y += maxHeight) {
+      maxHeight = 0;
+      for (let x = 0; x + currentSize <= this.atlasCanvas.width && !nextCodePoint.done; x += currentSize) {
+        let codePoint = nextCodePoint.value;
+        let glyph = this.glyphs.get(codePoint)!;
+        const { data, width, height } = glyph;
+
+        // advance in the atlas
+        currentSize = glyph.width;
+        maxHeight = Math.max(maxHeight, glyph.height);
+
+        // build atlas and stash info
+        this.atlasCtx.putImageData(this._makeRGBAImageData(data, width, height), x, y);
+        this.glyphAtlasLocation.set(codePoint, { x, y });
+
+        // next iter
+        nextCodePoint = codePoints.next();
+      }
+    }
 
   }
 }
@@ -675,6 +736,7 @@ export interface SDFTextOptions {
   color?: Color;
   text: string;
 }
+
 export class SDFText extends Graphic {
   constructor(private options: SDFTextOptions) {
     super(); // TODO super GraphicsOptions support
@@ -709,12 +771,13 @@ export class SDFText extends Graphic {
 }
 
 const glsl = tags => tags[0];
-
-const fontSize = 100;
 const sdfFont = new SDFFont({
-  fontFile: './static/Roboto-Regular.ttf',
+  // fontFile: './static/Roboto-Regular.ttf',
+  // fontFamily: 'Roboto',
+  fontFile: './static/PixelifySans-Regular.ttf',
+  fontFamily: 'PixelifySans',
   fontWeight: 100,
-  fontSize
+  fontSize: 100
 });
 
 
@@ -727,58 +790,59 @@ const game = new Engine({
 (game.graphicsContext as ExcaliburGraphicsContextWebGL).lazyRegister("ex.sdf-text-renderer", () => new SDFTextRenderer());
 
 await game.start();
+await sdfFont.load();
 
 
-const textAtlas = ImageSource.fromHtmlCanvasElement(sdfFont.atlasCanvas);
-await textAtlas.ready;
-
-const textActor = new Actor({
-  width: 400,
-  height: 400,
-  color: Color.Red,
-  pos: vec(400, 400)
-});
-// TODO this will be replaced by a SDF Renderer
-textActor.graphics.material = game.graphicsContext.createMaterial({
-  name: 'text',
-  color: Color.Violet,
-  fragmentSource: glsl`#version 300 es
-    precision mediump float;
-
-    uniform float u_time_ms;
-    uniform vec4 u_color;
-    uniform float u_buffer;
-    uniform float u_gamma;
-    uniform sampler2D u_graphic;
-    uniform sampler2D u_text_atlas;
-
-    in vec2 v_uv;
-    in vec2 v_screenuv;
-    out vec4 fragColor;
-    void main() {
-      float dist = texture(u_text_atlas, v_uv).r;
-      float alpha = smoothstep(u_buffer - u_gamma, u_buffer + u_gamma, dist);
-      fragColor = vec4(u_color.rgb, alpha * u_color.a);
-      fragColor.rgb *= fragColor.a;
-    }
-  `,
-  uniforms: {
-    u_gamma: 2 * 1.4142 / fontSize,
-    u_buffer: .75
-  },
-  images: {
-    u_text_atlas: textAtlas // TODO add ready check
-  }
-
-});
-game.add(textActor);
+// const textAtlas = ImageSource.fromHtmlCanvasElement(sdfFont.atlasCanvas);
+// await textAtlas.ready;
+//
+// const textActor = new Actor({
+//   width: 400,
+//   height: 400,
+//   color: Color.Red,
+//   pos: vec(400, 400)
+// });
+// // TODO this will be replaced by a SDF Renderer
+// textActor.graphics.material = game.graphicsContext.createMaterial({
+//   name: 'text',
+//   color: Color.Violet,
+//   fragmentSource: glsl`#version 300 es
+//     precision mediump float;
+//
+//     uniform float u_time_ms;
+//     uniform vec4 u_color;
+//     uniform float u_buffer;
+//     uniform float u_gamma;
+//     uniform sampler2D u_graphic;
+//     uniform sampler2D u_text_atlas;
+//
+//     in vec2 v_uv;
+//     in vec2 v_screenuv;
+//     out vec4 fragColor;
+//     void main() {
+//       float dist = texture(u_text_atlas, v_uv).r;
+//       float alpha = smoothstep(u_buffer - u_gamma, u_buffer + u_gamma, dist);
+//       fragColor = vec4(u_color.rgb, alpha * u_color.a);
+//       fragColor.rgb *= fragColor.a;
+//     }
+//   `,
+//   uniforms: {
+//     u_gamma: 2 * 1.4142 / 100,
+//     u_buffer: .75
+//   },
+//   images: {
+//     u_text_atlas: textAtlas // TODO add ready check
+//   }
+//
+// });
+// game.add(textActor);
 
 const sdfText = new SDFText({
   sdfFont,
   color: Color.Purple,
-  text: '🎉🎂Hello SDF Text! ◑﹏◐ !',
+  text: '"{}^$@Hello SDF \nText!!@', // TODO quotes dont render in the correct spot
   visibleCharacters: 0,
-  size: 32
+  size: 100
 });
 
 const sdfActor = new Actor({
@@ -791,8 +855,6 @@ game.add(sdfActor);
 setInterval(() => {
   sdfText.visibleCharacters++;
 }, 200);
-
-
 
 // Add visible glyphs
 // TODO text effects
