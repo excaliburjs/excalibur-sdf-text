@@ -268,9 +268,8 @@ export class SDFFont implements Loadable<HTMLCanvasElement> {
   public measureText(text: string, maxWidth?: number): BoundingBox {
     if (!this.isLoaded()) {
       throw new Error(`Cannot measureText(${text}) on a font [${this._fontFile}] that is not loaded.`)
-
-
     }
+
     return new BoundingBox();
 
     // TODO this needs to be loaded first I think
@@ -643,7 +642,6 @@ export class SDFTextRenderer implements RendererPlugin {
       const imageWidth = maybeImageWidth;
       const imageHeight = maybeImageHeight;
 
-      // TODO uv padding needed?
       const uvx0 = (sx) / imageWidth;
       const uvy0 = (sy) / imageHeight;
       const uvx1 = (sx + sw) / imageWidth;
@@ -821,51 +819,6 @@ const game = new Engine({
 
 await game.start(new Loader([sdfFont]));
 
-
-// const textAtlas = ImageSource.fromHtmlCanvasElement(sdfFont.atlasCanvas);
-// await textAtlas.ready;
-//
-// const textActor = new Actor({
-//   width: 400,
-//   height: 400,
-//   color: Color.Red,
-//   pos: vec(400, 400)
-// });
-// // TODO this will be replaced by a SDF Renderer
-// textActor.graphics.material = game.graphicsContext.createMaterial({
-//   name: 'text',
-//   color: Color.Violet,
-//   fragmentSource: glsl`#version 300 es
-//     precision mediump float;
-//
-//     uniform float u_time_ms;
-//     uniform vec4 u_color;
-//     uniform float u_buffer;
-//     uniform float u_gamma;
-//     uniform sampler2D u_graphic;
-//     uniform sampler2D u_text_atlas;
-//
-//     in vec2 v_uv;
-//     in vec2 v_screenuv;
-//     out vec4 fragColor;
-//     void main() {
-//       float dist = texture(u_text_atlas, v_uv).r;
-//       float alpha = smoothstep(u_buffer - u_gamma, u_buffer + u_gamma, dist);
-//       fragColor = vec4(u_color.rgb, alpha * u_color.a);
-//       fragColor.rgb *= fragColor.a;
-//     }
-//   `,
-//   uniforms: {
-//     u_gamma: 2 * 1.4142 / 100,
-//     u_buffer: .75
-//   },
-//   images: {
-//     u_text_atlas: textAtlas // TODO add ready check
-//   }
-//
-// });
-// game.add(textActor);
-
 const sdfText = new SDFText({
   sdfFont,
   // color: Color.Purple,
@@ -884,7 +837,5 @@ game.add(sdfActor);
 setInterval(() => {
   sdfText.visibleCharacters++;
 }, 200);
-
-// TODO handle measureText
 
 document.body.appendChild(sdfFont.atlasCanvas);
