@@ -2,6 +2,12 @@
 
 `@excaliburjs/sdf-text`
 
+Why SDF text? It's a nice middle ground when you want to draw high fidelity text (non-pixel) at various font sizes fast and at a decent quality.
+While avoiding operating system specific rendering, and slow rasterization.
+
+The tradeoff is you lose all the fancy OS level text rendering capabilities and some quality (like multi-colored emojis, bolding, italics, etc), you gain speed 
+near indistinguishable quality, fast drawing with batch rendering, OS independent rendering, and flexibility on glyphs in your font.
+
 ## Example
 
 ```typescript
@@ -11,7 +17,7 @@ const game = new Engine({
   height: 800
 });
 
-// Requires a new renderer
+// Requires a new renderer (in the future this will be handled with a ex.Plugin (TBD))
 (game.graphicsContext as ExcaliburGraphicsContextWebGL).lazyRegister("ex.sdf-text-renderer", () => new SDFTextRenderer());
 
 const sdfFont = new SDFFont({
@@ -49,24 +55,18 @@ document.body.appendChild(sdfFont.atlasCanvas);
 
 ```
 
-
 ## Theory
 
 Excalibur browser component for rendering SDF text into a game
 
-
-Ideas
-- Layout text ahead of time for alignment and justification (backport to excalibur core?)
-
-
 ## TODO
-
+* [ ] Layout text ahead of time for alignment and justification (backport to excalibur core?)
 * [ ] Experiment with an excalibur plugin system
   - Install renderer
   - Install system
   - 
 * [ ] SDFTextRenderer Build an SDF text renderer for excalibur
-* [ ] SDFAtlasBuilder/SDFFont Build a vite plugin (unplugin) that can run in node to build sdf atlas'
+* [ ] Build a vite plugin (unplugin) that can run in node to build sdf atlas
 * [x] SDFText Graphic Pair the atlas with a resource type SDFFont that can load the atlas
 
 
