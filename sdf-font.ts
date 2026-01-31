@@ -1,59 +1,14 @@
 import TinySDF from "@mapbox/tiny-sdf";
 import type { TinySDFOptions } from "@mapbox/tiny-sdf";
-import { BoundingBox, Color, FontSource, Vector } from "excalibur";
+import { BoundingBox, Color, FontSource, ImageFiltering, Resource, Vector } from "excalibur";
+import { ImageSource } from "excalibur";
 import type { Loadable } from "excalibur";
 
 export type UnicodeCodePointRange = [startCodePoint: number, endCodePoint: number];
 
-// TODO should we just make 1 file? and cook the image with the metadata?
+export type SDFSource = SDFFont | SDFAtlas;
 
-export interface FromAtlasOptions {
-  /**
-   * Path to atlas image file
-   */
-  path: string;
-
-  /**
-   * JSON representation of FromFontOptions + Glyph meta data
-   */
-  dataFilePath: string;
-}
-
-export interface FromFontOptions {
-  path: string; // ttf file
-  family: string; // some name
-
-  /**
-   * Default black
-   */
-  color?: Color;
-  /*
-   * Default 100
-   */
-  weight?: number;
-  /**
-   * Default 'normal'
-   */
-  style?: string;
-  /**
-   * String of glyphs to bake into the sdf
-   *
-   * Default: ASCII printable characters (character code 32-127)
-   */
-  alphabet?: string | UnicodeCodePointRange[];
-  /**
-   * Intended font size for this sdf font
-   *
-   * Roughly pick the "biggest" size in pixels your text will be for the highest quality
-   */
-  size?: number;
-}
-
-export type SDFSource = FromFontOptions | FromFontOptions;
-// Maybe just have a separate type SDFAtlas to avoid confusion? then SDFAtlas.toFont();
-//
-
-export interface SDFCanvas {
+export type SDFCanvas = HTMLCanvasElement & {
   getContext(context: '2d'): any;
   width: number;
   height: number;
@@ -139,8 +94,6 @@ export interface SDFGlyph {
    * Amount the glyph advances the cursor/pen while writing
    */
   glyphAdvance: number;
-
-
 }
 
 export function getCharactersFromUnicodeRanges(ranges: UnicodeCodePointRange[]) {
@@ -152,12 +105,17 @@ export function getCharactersFromUnicodeRanges(ranges: UnicodeCodePointRange[]) 
   ).join('');
 }
 
+
+/**
+ * Will produce an SDF atlas on the fly during game load, if you want pre-generate and load and existing
+ * atlas use {@link SDFAtlas}
+ */
 export class SDFFont implements Loadable<SDFCanvas> {
-  atlasCanvas: SDFCanvas;
+  atlas: HTMLCanvasElement;
   atlasCtx: CanvasRenderingContext2D;
 
   get data() {
-    return this.atlasCanvas;
+    return this.atlas;
   }
 
   private _isLoaded = false;
@@ -189,9 +147,9 @@ export class SDFFont implements Loadable<SDFCanvas> {
 
   private _fontSourceLoader: (font: string, family: string) => Promise<void> =
     async (file, family) => {
-    const fontFile = new FontSource(file, family);
-    await fontFile.load();
-  }
+      const fontFile = new FontSource(file, family);
+      await fontFile.load();
+    }
 
   private _color: Color;
   private _fontSize: number = 16;
@@ -211,6 +169,10 @@ export class SDFFont implements Loadable<SDFCanvas> {
     // [0x00A0, 0x00FF], // Latin-1 Supplement
     // [0x0100, 0x017F], // Latin Extended-A;
   ]);
+
+  public get alphabet() {
+    return this._alphabet;
+  }
 
   private _fontFile: string;
 
@@ -274,10 +236,10 @@ export class SDFFont implements Loadable<SDFCanvas> {
 
     const dimension = Math.ceil(Math.sqrt(this._alphabet.length)) * size;
 
-    this.atlasCanvas = this._canvasProvider(dimension, dimension);
-    if (!this.atlasCanvas) throw new Error("Cannot Build SDF Font Atlas Canvas");
+    this.atlas = this._canvasProvider(dimension, dimension);
+    if (!this.atlas) throw new Error("Cannot Build SDF Font Atlas Canvas");
 
-    this.atlasCtx = this.atlasCanvas.getContext('2d')!;
+    this.atlasCtx = this.atlas.getContext('2d')!;
     if (!this.atlasCtx) throw new Error("Cannot Build SDF Font Atlas Context");
   }
 
@@ -360,7 +322,7 @@ export class SDFFont implements Loadable<SDFCanvas> {
   }
 
   async load(): Promise<SDFCanvas> {
-    if (this._isLoaded) return this.atlasCanvas;
+    if (this._isLoaded) return this.atlas;
     await this._fontSourceLoader(this._fontFile, this._fontFamily);
 
     // TinySDF generator
@@ -387,9 +349,9 @@ export class SDFFont implements Loadable<SDFCanvas> {
     let currentSize = 0;
     let maxHeight = 0;
 
-    for (let y = 0; y + maxHeight <= this.atlasCanvas.height && !nextCodePoint.done; y += maxHeight) {
+    for (let y = 0; y + maxHeight <= this.atlas.height && !nextCodePoint.done; y += maxHeight) {
       maxHeight = 0;
-      for (let x = 0; x + currentSize <= this.atlasCanvas.width && !nextCodePoint.done; x += currentSize) {
+      for (let x = 0; x + currentSize <= this.atlas.width && !nextCodePoint.done; x += currentSize) {
         let codePoint = nextCodePoint.value;
         let glyph = this.glyphs.get(codePoint)!;
         const { data, width, height } = glyph;
@@ -409,6 +371,153 @@ export class SDFFont implements Loadable<SDFCanvas> {
     }
 
     this._isLoaded = true;
-    return this.atlasCanvas!;
+    return this.atlas!;
+  }
+}
+
+export interface SDFAtlasOptions {
+  /**
+   * Path to atlas image file
+   */
+  atlasPath: string;
+
+  /**
+   * JSON representation glyph meta data
+   */
+  metadataFilePath: string;
+}
+
+export type SDFLiteGlyph = Omit<SDFGlyph, 'data'>;
+export type SDFMetadata = {
+  atlas: string,
+  color: string,
+  alphabet: string,
+  fontSize: number,
+  buffer: number,
+  halo: number,
+  gamma: number,
+  glyphs: Record<string, SDFLiteGlyph>
+};
+
+/**
+ * Represents an SDF atlas for drawing SDF text
+ */
+export class SDFAtlas implements Loadable<ImageSource> {
+  glyphs: Map<string, SDFLiteGlyph> = new Map();
+
+  data: ImageSource;
+  atlas: HTMLImageElement;
+  metadata: Resource<SDFMetadata>;
+
+  color: Color = Color.Black; // TODO wire up
+  halo: number = 0; // TODO wire up 
+  gamma: number = 0; // TODO wire up
+  fontSize: number = 16; // TODO wire up 
+  buffer: number = 2; // TODO wire up
+
+  private _atlasPath: string;
+  private _metadataFilePath: string;
+
+  constructor(options: SDFAtlasOptions) {
+    this._atlasPath = options.atlasPath;
+    this._metadataFilePath = options.metadataFilePath;
+    this.data = new ImageSource(this._atlasPath, { filtering: ImageFiltering.Blended });
+    this.metadata = new Resource<SDFMetadata>(this._metadataFilePath, 'json');
+  }
+
+  async load(): Promise<ImageSource> {
+    const imagePromise = this.data.load();
+    const metadataPromise = this.metadata.load();
+    await Promise.all([imagePromise, metadataPromise]);
+
+    for (const [codePoint, glyph] of Object.entries(this.metadata.data.glyphs)) {
+      this.glyphs.set(codePoint, glyph);
+    }
+
+    const {
+      color,
+      halo,
+      gamma,
+      fontSize,
+      buffer
+    } = this.metadata.data;
+
+    this.color = Color.fromHex(color),
+    this.halo = halo;
+    this.gamma = gamma;
+    this.fontSize = fontSize;
+    this.buffer = buffer;
+
+    this.atlas = this.data.image;
+    return this.data;
+  }
+
+  isLoaded(): boolean {
+    return this.data.isLoaded() && this.metadata.isLoaded();
+  }
+
+  private _cachedText?: string;
+  private _cachedLines?: string[];
+  private _cachedRenderWidth?: number;
+  protected _getLinesFromText(text: string, size: number, maxWidth?: number) {
+    if (this._cachedText === text && this._cachedRenderWidth === maxWidth && this._cachedLines?.length) {
+      return this._cachedLines;
+    }
+
+    const lines = text.split('\n');
+
+    if (maxWidth == null) {
+      return lines;
+    }
+
+    // If the current line goes past the maxWidth, append a new line without modifying the underlying text.
+    for (let i = 0; i < lines.length; i++) {
+      let line = lines[i];
+      let newLine = '';
+      // Note: we subtract the spacing to counter the initial padding on the left side.
+      if (this.measureText(line, size).width > maxWidth) {
+        while (this.measureText(line, size).width > maxWidth) {
+          newLine = line[line.length - 1] + newLine;
+          line = line.slice(0, -1); // Remove last character from line
+        }
+
+        // Update the array with our new values
+        lines[i] = line;
+        lines[i + 1] = newLine;
+      }
+    }
+
+    this._cachedText = text;
+    this._cachedLines = lines;
+    this._cachedRenderWidth = maxWidth;
+
+    return lines;
+  }
+
+  public measureText(text: string, size: number, maxWidth?: number): BoundingBox {
+    if (!this.isLoaded()) {
+      throw new Error(`Cannot measureText(${text}) on a font [${this._atlasPath}, ${this._metadataFilePath}] that is not loaded.`)
+    }
+
+    const lines = this._getLinesFromText(text, size, maxWidth);
+    const maxWidthLine = lines.reduce((a, b) => {
+      return a.length > b.length ? a : b;
+    });
+    const glyphs: SDFLiteGlyph[] = [];
+    for (let char of maxWidthLine) {
+      const maybeGlyph = this.glyphs.get(char);
+      if (maybeGlyph) {
+        glyphs.push(maybeGlyph);
+      }
+    }
+    let width = 0;
+    let height = 0;
+    const scale = size / this.metadata.data.fontSize;
+
+    for (const glyph of glyphs) {
+      width += glyph.glyphAdvance * scale;
+      height = Math.max(height, glyph.glyphHeight * scale);
+    }
+    return BoundingBox.fromDimension(width, height * lines.length, Vector.Zero);
   }
 }

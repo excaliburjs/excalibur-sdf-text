@@ -18,7 +18,8 @@ export class TinySDFHeadless extends TinySDF {
 
 const args = process.argv;
 const cwd = process.cwd;
-// TODO better arg parsing please
+// TODO better arg parsing please commander.js?
+// https://github.com/tj/commander.js
 const fontFile = args[2];
 const fontFamily = args[3]
 const outname = args[4];
@@ -30,7 +31,7 @@ const sdfFont = new SDFFont({
   fontWeight: 100,
   fontSize: 100,
 
-  canvasProvider: (width, height) => new Canvas(width, height),
+  canvasProvider: (width, height) => new Canvas(width, height) as unknown as HTMLCanvasElement,
   sdfProvider: (options) => new TinySDFHeadless(options),
   fontSourceLoader: async (font, family) => { FontLibrary.use(family, [font]) },
   imageDataProvider: (width, height) => new ImageData(width, height),
@@ -40,13 +41,25 @@ await sdfFont.load();
 
 // Tust me this exists on skia cnavas
 const outAtlasFile = `./${outname}.png`;
-(sdfFont.atlasCanvas as any).toFileSync(outAtlasFile);
+(sdfFont.atlas as any).toFileSync(outAtlasFile);
 
 let output: {
   atlas: string,
+  color: string,
+  alphabet: string,
+  fontSize: number,
+  buffer: number,
+  halo: number,
+  gamma: number,
   glyphs: Record<string, Omit<SDFGlyph, 'data'>>
 } = {
   atlas: outAtlasFile,
+  color: sdfFont.color.toHex(),
+  fontSize: sdfFont.fontSize,
+  buffer: sdfFont.buffer,
+  alphabet: sdfFont.alphabet,
+  halo: sdfFont.halo,
+  gamma: sdfFont.gamma,
   glyphs: {}
 };
 

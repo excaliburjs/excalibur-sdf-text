@@ -1,9 +1,9 @@
 import { Color, ExcaliburGraphicsContext, ExcaliburGraphicsContextWebGL, Graphic, vec } from "excalibur";
-import { SDFFont } from "./sdf-font";
+import { SDFSource } from "./sdf-font";
 import { SDFTextRenderer } from "./sdf-text-renderer";
 
 export interface SDFTextOptions {
-  sdfFont: SDFFont;
+  sdf: SDFSource;
   size: number;
   visibleCharacters: number;
   color?: Color;
@@ -35,7 +35,7 @@ export class SDFText extends Graphic {
     if (ex instanceof ExcaliburGraphicsContextWebGL) {
       ex.draw<SDFTextRenderer>(
         "ex.sdf-text-renderer",
-        this.options.sdfFont,
+        this.options.sdf,
         this.options.text,
         vec(x, y),
         this.options.size,

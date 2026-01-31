@@ -2,8 +2,7 @@
 import { Color, ExcaliburGraphicsContextWebGL, HTMLImageSource, ImageSourceAttributeConstants, parseImageFiltering, parseImageWrapping, QuadIndexBuffer, RendererPlugin, Shader, Vector, VertexBuffer, VertexLayout } from 'excalibur';
 import fragmentSource from './sdf-text.frag.glsl?raw';
 import vertexSource from './sdf-text.vert.glsl?raw';
-import { SDFFont } from './sdf-font';
-
+import { SDFSource } from './sdf-font';
 
 export function getMaxShaderComplexity(gl: WebGL2RenderingContext, numIfs: number): number {
   const assembleTestShader = (numIfs: number) => {
@@ -215,7 +214,7 @@ export class SDFTextRenderer implements RendererPlugin {
   private _sdfHalo: number = .75;
   private _defaultColor = Color.Black;
 
-  draw(font: SDFFont, text: string, pos: Vector, size: number, charactersVisible: number = Infinity, color?: Color): void {
+  draw(font: SDFSource, text: string, pos: Vector, size: number, charactersVisible: number = Infinity, color?: Color): void {
     // Force a render if the batch is full
     if (this._isFull()) {
       this.flush();
@@ -233,10 +232,10 @@ export class SDFTextRenderer implements RendererPlugin {
     }
 
     // This creates and uploads the texture if not already done
-    this._addImageAsTexture(font.atlasCanvas);
-    const maybeImageWidth = this._getImageWidth(font.atlasCanvas);
-    const maybeImageHeight = this._getImageHeight(font.atlasCanvas);
-    const textureId = this._getTextureIdForImage(font.atlasCanvas);
+    this._addImageAsTexture(font.atlas);
+    const maybeImageWidth = this._getImageWidth(font.atlas);
+    const maybeImageHeight = this._getImageHeight(font.atlas);
+    const textureId = this._getTextureIdForImage(font.atlas);
 
     const transform = this._context.getTransform();
     const vertexBuffer = this._layout.vertexBuffer.bufferData;

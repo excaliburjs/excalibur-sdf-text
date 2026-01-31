@@ -6,7 +6,7 @@ import {
   Loader,
   vec,
 } from 'excalibur';
-import { SDFFont } from './sdf-font';
+import { SDFAtlas, SDFFont } from './sdf-font';
 import { SDFTextRenderer } from './sdf-text-renderer';
 import { SDFText } from './sdf-text';
 
@@ -25,6 +25,11 @@ const sdfFont = new SDFFont({
   fontSize: 100
 });
 
+const sdfAtlas = new SDFAtlas({
+  atlasPath: './static/pixelfontsdf.png',
+  metadataFilePath: './static/pixelfontsdf.json'
+});
+
 
 const game = new Engine({
   width: 800,
@@ -34,10 +39,10 @@ const game = new Engine({
 // TODO plugin system
 (game.graphicsContext as ExcaliburGraphicsContextWebGL).lazyRegister("ex.sdf-text-renderer", () => new SDFTextRenderer());
 
-await game.start(new Loader([sdfFont]));
+await game.start(new Loader([sdfFont, sdfAtlas]));
 
 const sdfText = new SDFText({
-  sdfFont,
+  sdf: sdfAtlas,
   // color: Color.Purple,
   text: '"{}^$@Hello\nSDF\nText!!@',
   visibleCharacters: 0,
@@ -58,4 +63,4 @@ setInterval(() => {
 console.log(sdfFont.measureText(sdfText.text, 100));
 console.log(Array.from(sdfFont.glyphs.entries()));
 
-document.body.appendChild(sdfFont.atlasCanvas);
+document.body.appendChild(sdfFont.atlas);

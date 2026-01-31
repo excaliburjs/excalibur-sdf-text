@@ -61,7 +61,7 @@ Excalibur browser component for rendering SDF text into a game
 
 ## TODO
 * [ ] Layout text ahead of time for alignment and justification (backport to excalibur core?)
-* [ ] use skia-canvas to generate atlass ahead of time (cli command?)
+* [x] use skia-canvas to generate atlass ahead of time (cli command?)
 * [ ] Update SDFFont to take in an existing atlas
 * [ ] Experiment with an excalibur plugin system
   - Install renderer
@@ -71,4 +71,8 @@ Excalibur browser component for rendering SDF text into a game
 * [ ] Build a vite plugin (unplugin) that can run in node to build sdf atlas
 * [x] SDFText Graphic Pair the atlas with a resource type SDFFont that can load the atlas
 
+
+## Local Dev
+
+* `npm link` to register the package.json bin scripts
 
