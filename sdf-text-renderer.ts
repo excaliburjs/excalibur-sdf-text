@@ -260,11 +260,10 @@ export class SDFTextRenderer implements RendererPlugin {
       }
 
       const glyph = font.glyphs.get(char);
-      const glyphPos = font.glyphAtlasLocation.get(char);
-      if (!glyph || !glyphPos) continue;
+      if (!glyph) continue;
 
-      const sx = glyphPos.x;
-      const sy = glyphPos.y;
+      const sx = glyph.x ?? 0;
+      const sy = glyph.y ?? 0;
       const sw = glyph.width;
       const sh = glyph.height;
 

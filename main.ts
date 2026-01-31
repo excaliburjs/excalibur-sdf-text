@@ -56,5 +56,6 @@ setInterval(() => {
 }, 200);
 
 console.log(sdfFont.measureText(sdfText.text, 100));
+console.log(Array.from(sdfFont.glyphs.entries()));
 
 document.body.appendChild(sdfFont.atlasCanvas);

@@ -10,7 +10,7 @@
   ],
   "license": "BSD-2-Clause",
   "author": "Erik Onarheim",
-  "type": "esm",
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "start": "vite",
@@ -18,11 +18,16 @@
     "serve": "vite preview",
     "test": "npm run test"
   },
+  "bin": {
+    "ex-generate-sdf": "./cli.ts"
+  },
   "dependencies": {
     "@mapbox/tiny-sdf": "2.0.7",
-    "excalibur": "0.32.0"
+    "excalibur": "0.32.0",
+    "skia-canvas": "3.0.8"
   },
   "devDependencies": {
+    "@types/node": "^25.1.0",
     "typescript": "5.9.3",
     "vite": "7.3.1"
   }

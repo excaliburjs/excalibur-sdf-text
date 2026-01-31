@@ -1,12 +1,76 @@
-import TinySDF, { TinySDFOptions } from "@mapbox/tiny-sdf";
-import { BoundingBox, Color, FontSource, Loadable, Vector } from "excalibur";
+import TinySDF from "@mapbox/tiny-sdf";
+import type { TinySDFOptions } from "@mapbox/tiny-sdf";
+import { BoundingBox, Color, FontSource, Vector } from "excalibur";
+import type { Loadable } from "excalibur";
 
 export type UnicodeCodePointRange = [startCodePoint: number, endCodePoint: number];
 
+// TODO should we just make 1 file? and cook the image with the metadata?
+
+export interface FromAtlasOptions {
+  /**
+   * Path to atlas image file
+   */
+  path: string;
+
+  /**
+   * JSON representation of FromFontOptions + Glyph meta data
+   */
+  dataFilePath: string;
+}
+
+export interface FromFontOptions {
+  path: string; // ttf file
+  family: string; // some name
+
+  /**
+   * Default black
+   */
+  color?: Color;
+  /*
+   * Default 100
+   */
+  weight?: number;
+  /**
+   * Default 'normal'
+   */
+  style?: string;
+  /**
+   * String of glyphs to bake into the sdf
+   *
+   * Default: ASCII printable characters (character code 32-127)
+   */
+  alphabet?: string | UnicodeCodePointRange[];
+  /**
+   * Intended font size for this sdf font
+   *
+   * Roughly pick the "biggest" size in pixels your text will be for the highest quality
+   */
+  size?: number;
+}
+
+export type SDFSource = FromFontOptions | FromFontOptions;
+// Maybe just have a separate type SDFAtlas to avoid confusion? then SDFAtlas.toFont();
+//
+
+export interface SDFCanvas {
+  getContext(context: '2d'): any;
+  width: number;
+  height: number;
+}
+
+export interface SDFImageData {
+  data: any;
+}
+
 export interface SDFFontOptions {
   fontFile: string; // ttf file
-
   fontFamily: string; // some name
+
+  sdfProvider?: (options: TinySDFOptions) => TinySDF;
+  canvasProvider?: (width: number, height: number) => SDFCanvas;
+  imageDataProvider?: (width: number, height: number) => SDFImageData;
+  fontSourceLoader?: (fontFile: string, fontFamily: string) => Promise<void>;
 
   /**
    * Default black
@@ -35,6 +99,14 @@ export interface SDFFontOptions {
 }
 
 export interface SDFGlyph {
+  /**
+   * x pixel coordinate on the SDF atlas image
+   */
+  x?: number;
+  /**
+   * y pixel coordinate on the SDF atlas image
+   */
+  y?: number;
   /**
    * Grayscale image data, 1 component per pixel
    */
@@ -67,6 +139,8 @@ export interface SDFGlyph {
    * Amount the glyph advances the cursor/pen while writing
    */
   glyphAdvance: number;
+
+
 }
 
 export function getCharactersFromUnicodeRanges(ranges: UnicodeCodePointRange[]) {
@@ -78,8 +152,8 @@ export function getCharactersFromUnicodeRanges(ranges: UnicodeCodePointRange[]) 
   ).join('');
 }
 
-export class SDFFont implements Loadable<HTMLCanvasElement> {
-  atlasCanvas: HTMLCanvasElement;
+export class SDFFont implements Loadable<SDFCanvas> {
+  atlasCanvas: SDFCanvas;
   atlasCtx: CanvasRenderingContext2D;
 
   get data() {
@@ -97,14 +171,28 @@ export class SDFFont implements Loadable<HTMLCanvasElement> {
    * Readonly
    */
   glyphs: Map<string, SDFGlyph> = new Map();
-  /**
-   * Codepoint to SDF atlas coordinates
-   *
-   * Readonly
-   */
-  glyphAtlasLocation: Map<string, { x: number, y: number }> = new Map();
 
   private __tinySdf: TinySDF;
+  private _sdfProvider: (options: TinySDFOptions) => TinySDF =
+    (options) => new TinySDF(options);
+
+  private _canvasProvider: (width: number, height: number) => SDFCanvas =
+    (width, height) => {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      return canvas;
+    }
+
+  private _imageDataProvider: (width: number, height: number) => SDFImageData =
+    (width, height) => new ImageData(width, height)
+
+  private _fontSourceLoader: (font: string, family: string) => Promise<void> =
+    async (file, family) => {
+    const fontFile = new FontSource(file, family);
+    await fontFile.load();
+  }
+
   private _color: Color;
   private _fontSize: number = 16;
 
@@ -155,10 +243,11 @@ export class SDFFont implements Loadable<HTMLCanvasElement> {
   }
 
   constructor(options: SDFFontOptions) {
-    this.atlasCanvas = document.createElement('canvas');
-    if (!this.atlasCanvas) throw new Error("Cannot Build SDF Font Atlas Canvas");
-    this.atlasCtx = this.atlasCanvas.getContext('2d')!;
-    if (!this.atlasCtx) throw new Error("Cannot Build SDF Font Atlas Context");
+
+    this._sdfProvider = options.sdfProvider ?? this._sdfProvider;
+    this._canvasProvider = options.canvasProvider ?? this._canvasProvider;
+    this._imageDataProvider = options.imageDataProvider ?? this._imageDataProvider;
+    this._fontSourceLoader = options.fontSourceLoader ?? this._fontSourceLoader;
 
     this._color = options.color ?? Color.Black;
 
@@ -184,12 +273,16 @@ export class SDFFont implements Loadable<HTMLCanvasElement> {
     this._size = size;
 
     const dimension = Math.ceil(Math.sqrt(this._alphabet.length)) * size;
-    this.atlasCanvas.width = dimension;
-    this.atlasCanvas.height = dimension;
+
+    this.atlasCanvas = this._canvasProvider(dimension, dimension);
+    if (!this.atlasCanvas) throw new Error("Cannot Build SDF Font Atlas Canvas");
+
+    this.atlasCtx = this.atlasCanvas.getContext('2d')!;
+    if (!this.atlasCtx) throw new Error("Cannot Build SDF Font Atlas Context");
   }
 
   private _makeRGBAImageData(alphaChannel: Uint8ClampedArray, width: number, height: number) {
-    const imageData = new ImageData(width, height);
+    const imageData = this._imageDataProvider(width, height);
     for (let i = 0; i < alphaChannel.length; i++) {
       imageData.data[4 * i + 0] = alphaChannel[i];
       imageData.data[4 * i + 1] = alphaChannel[i];
@@ -244,8 +337,6 @@ export class SDFFont implements Loadable<HTMLCanvasElement> {
       throw new Error(`Cannot measureText(${text}) on a font [${this._fontFile}] that is not loaded.`)
     }
 
-
-
     const lines = this._getLinesFromText(text, size, maxWidth);
     const maxWidthLine = lines.reduce((a, b) => {
       return a.length > b.length ? a : b;
@@ -268,13 +359,12 @@ export class SDFFont implements Loadable<HTMLCanvasElement> {
     return BoundingBox.fromDimension(width, height * lines.length, Vector.Zero);
   }
 
-  async load(): Promise<HTMLCanvasElement> {
+  async load(): Promise<SDFCanvas> {
     if (this._isLoaded) return this.atlasCanvas;
-    const fontFile = new FontSource(this._fontFile, this._fontFamily);
-    await fontFile.load();
+    await this._fontSourceLoader(this._fontFile, this._fontFamily);
 
     // TinySDF generator
-    this.__tinySdf = new TinySDF({
+    this.__tinySdf = this._sdfProvider({
       fontSize: this._fontSize,
       fontFamily: this._fontFamily,
       fontStyle: this._fontStyle,
@@ -309,8 +399,9 @@ export class SDFFont implements Loadable<HTMLCanvasElement> {
         maxHeight = Math.max(maxHeight, glyph.height);
 
         // build atlas and stash info
-        this.atlasCtx.putImageData(this._makeRGBAImageData(data, width, height), x, y);
-        this.glyphAtlasLocation.set(codePoint, { x, y });
+        this.atlasCtx.putImageData(this._makeRGBAImageData(data, width, height) as any, x, y);
+        glyph.x = x;
+        glyph.y = y;
 
         // next iter
         nextCodePoint = codePoints.next();
