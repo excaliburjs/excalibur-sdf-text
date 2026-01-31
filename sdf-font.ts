@@ -36,15 +36,15 @@ export interface SDFFontOptions {
 
 export interface SDFGlyph {
   /**
-   * Grayscale image data
+   * Grayscale image data, 1 component per pixel
    */
   data: Uint8ClampedArray;
   /**
-   * SDF image data width
+   * SDF image data width on the atlas (includes non-glyph buffer space)
    */
   width: number;
   /**
-   * SDF image data height
+   * SDF image data height on the atlas (includes non-glyph buffer space)
    */
   height: number;
   /**
@@ -52,15 +52,15 @@ export interface SDFGlyph {
    */
   glyphWidth: number;
   /**
-   * Actual glyph height
+   * Actual glyph height (ascent from baseline + descent from baseline)
    */
   glyphHeight: number;
   /**
-   * Top of the glyph (y coord)
+   * Top of the glyph (y coord) ascent from the baseline
    */
   glyphTop: number;
   /**
-   * Left of the glyph (x coord)
+   * Left of the glyph (x coord) relative to pen position
    */
   glyphLeft: number;
   /**

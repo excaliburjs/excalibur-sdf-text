@@ -61,6 +61,8 @@ Excalibur browser component for rendering SDF text into a game
 
 ## TODO
 * [ ] Layout text ahead of time for alignment and justification (backport to excalibur core?)
+* [ ] use skia-canvas to generate atlass ahead of time (cli command?)
+* [ ] Update SDFFont to take in an existing atlas
 * [ ] Experiment with an excalibur plugin system
   - Install renderer
   - Install system
