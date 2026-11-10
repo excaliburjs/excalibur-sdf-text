@@ -14,10 +14,7 @@ uniform mat4 u_matrix;
 
 void main(){
   gl_Position = u_matrix * vec4(a_position, 0., 1.);
-
   v_uv = a_uv;
-
   v_color = a_color;
-
   v_textureIndex = a_textureIndex;
 }

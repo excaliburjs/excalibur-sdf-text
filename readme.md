@@ -1,78 +1,99 @@
-# Excalibur SDF Text and Atlas Generation Plugin 
+# Excalibur SDF Text Plugin
 
-`@excaliburjs/sdf-text`
+`@excaliburjs/plugin-sdf-text`
 
-Why SDF text? It's a nice middle ground when you want to draw high fidelity text (non-pixel) at various font sizes fast and at a decent quality.
-While avoiding operating system specific rendering, and slow rasterization.
+Signed distance field text for [Excalibur](https://excaliburjs.com): one atlas, crisp text at any size, rotation or zoom, drawn by a batched WebGL renderer. It is also a worked example of an Excalibur `Plugin` that installs a custom `RendererPlugin` on the graphics context.
 
-The tradeoff is you lose all the fancy OS level text rendering capabilities and some quality (like multi-colored emojis, bolding, italics, etc), you gain speed 
-near indistinguishable quality, fast drawing with batch rendering, OS independent rendering, and flexibility on glyphs in your font.
+Why SDF text? `ex.Text` rasterizes with the 2D canvas, which looks great at the size it was rasterized at and goes soft when scaled or zoomed. A distance field atlas is generated once (at load time or ahead of time with the CLI) and the fragment shader reconstructs a sharp edge at whatever size you draw. You lose the browser's text shaping (ligatures, multi-colored emoji, bold and italic synthesized per draw), you gain resolution independence, batching, and the same output on every OS.
 
-## Example
+## Install
 
-```typescript
-
-const game = new Engine({
-  width: 800,
-  height: 800
-});
-
-// Requires a new renderer (in the future this will be handled with a ex.Plugin (TBD))
-(game.graphicsContext as ExcaliburGraphicsContextWebGL).lazyRegister("ex.sdf-text-renderer", () => new SDFTextRenderer());
-
-const sdfFont = new SDFFont({
-  fontFile: './static/JetBrainsMono-Regular.ttf',
-  fontFamily: 'JetBrainsMono',
-  alphabet: [[0x0020, 0x00FF]],
-  fontWeight: 100,
-  fontSize: 100
-});
-
-
-await game.start(new Loader([sdfFont]));
-
-const sdfText = new SDFText({
-  sdfFont,
-  // color: Color.Purple,
-  text: '"{}^$@Hello\nSDF\nText!!@',
-  visibleCharacters: 0,
-  size: 100 
-});
-
-const sdfActor = new Actor({
-  pos: vec(100, 100),
-  width: 100,
-  height: 100,
-  graphic: sdfText
-});
-game.add(sdfActor);
-setInterval(() => {
-  sdfText.visibleCharacters++;
-}, 200);
-
-// Inspect the atlas
-document.body.appendChild(sdfFont.atlasCanvas);
-
+```sh
+npm install @excaliburjs/plugin-sdf-text
 ```
 
-## Theory
+Requires `excalibur@^1.0.0` and WebGL (the renderer is a no-op on the 2D canvas fallback).
 
-Excalibur browser component for rendering SDF text into a game
+## Usage
 
-## TODO
-* [ ] Layout text ahead of time for alignment and justification (backport to excalibur core?)
-* [x] use skia-canvas to generate atlass ahead of time (cli command?)
-* [ ] Update SDFFont to take in an existing atlas
-* [ ] Experiment with an excalibur plugin system
-  - Install renderer
-  - Install system
-  - 
-* [ ] SDFTextRenderer Build an SDF text renderer for excalibur
-* [ ] Build a vite plugin (unplugin) that can run in node to build sdf atlas
-* [x] SDFText Graphic Pair the atlas with a resource type SDFFont that can load the atlas
+```typescript
+import * as ex from 'excalibur';
+import { SDFFont, SDFText, SDFTextPlugin } from '@excaliburjs/plugin-sdf-text';
 
+// Generates a 64px atlas from the browser's serif font at load time (or pass a `fontFile`)
+const font = new SDFFont({ fontFamily: 'Georgia, serif', fontSize: 64, color: ex.Color.White });
 
-## Local Dev
+const game = new ex.Engine({
+  plugins: [new SDFTextPlugin()] // registers the renderer on the WebGL graphics context
+});
 
-* `npm link` to register the package.json bin scripts
+await game.start(new ex.Loader([font]));
 
+const text = new SDFText({
+  sdf: font,
+  text: 'Crisp at any size',
+  size: 180, // bigger than the atlas is fine
+  textAlign: 'center',
+  maxWidth: 600
+});
+game.add(new ex.Actor({ pos: ex.vec(100, 100), graphic: text }));
+```
+
+`SDFText` is a regular `ex.Graphic`: use it anywhere a sprite goes, scale, rotate and tint it, give it `opacity`, and combine it with other graphics in a `GraphicsGroup`. Its `width` and `height` are measured from the atlas so actor bounds and offscreen culling work.
+
+### SDFFont options
+
+| option | default | notes |
+| --- | --- | --- |
+| `fontFamily` | required | a system font, or the family name you give `fontFile` |
+| `fontFile` | none | ttf/otf/woff to load before generating |
+| `fontSize` | 48 | size the atlas is generated at, roughly the biggest size you will draw |
+| `fontWeight` / `fontStyle` | 400 / normal | |
+| `alphabet` | printable ASCII | a string, or unicode code point ranges like `[[0x20, 0xff]]` |
+| `color` | black | default color for text drawn with this font |
+
+### SDFText options
+
+`text`, `size`, `color`, `visibleCharacters` (typewriter effects), `textAlign` (`left` | `center` | `right`), `maxWidth` (wraps on spaces), `lineHeight` (multiple of `size`, default 1.2), plus every `GraphicOptions` field (`opacity`, `scale`, `rotation`, `origin`, ...).
+
+## Pre-generated atlases
+
+Generating in the browser costs a few hundred milliseconds for a 64px ASCII atlas. For big alphabets or large sizes, bake the atlas ahead of time with the CLI (uses [skia-canvas](https://github.com/samizdatco/skia-canvas), an optional dependency) and ship the image and metadata with your game:
+
+```sh
+npx ex-generate-sdf ./fonts/PixelifySans-Regular.ttf PixelifySans ./public/pixelfont 64
+#  writes ./public/pixelfont.png and ./public/pixelfont.json
+```
+
+```typescript
+const pixel = new SDFAtlas({ atlasPath: '/pixelfont.png', metadataPath: '/pixelfont.json' });
+await game.start(new ex.Loader([pixel]));
+new SDFText({ sdf: pixel, text: 'from a baked atlas', size: 32 });
+```
+
+## Using the renderer directly
+
+The plugin is a thin wrapper. If you manage renderers yourself:
+
+```typescript
+const context = game.graphicsContext as ex.ExcaliburGraphicsContextWebGL;
+context.lazyRegister('ex.sdf-text-renderer', () => new SDFTextRenderer());
+
+// later, inside a Graphic's _drawImage
+context.draw<SDFTextRenderer>('ex.sdf-text-renderer', font, 'hello', ex.vec(x, y), 32, { color: ex.Color.Red });
+```
+
+Glyphs from every `SDFText` in a frame are batched into one draw call per atlas edge setting, up to the GPU's texture unit limit.
+
+## Development
+
+```sh
+npm install
+npm start          # example app
+npm run build      # dist/excalibur-sdf-text.js, .min.js and types
+npm test           # headless smoke test (needs `npx playwright install chromium`)
+```
+
+## Credits
+
+Distance fields are generated with [@mapbox/tiny-sdf](https://github.com/mapbox/tiny-sdf). Example fonts: JetBrains Mono (OFL), Roboto (Apache 2.0), Pixelify Sans (OFL).
