@@ -61,9 +61,22 @@ game.add(new ex.Actor({ pos: ex.vec(100, 100), graphic: text }));
 Generating in the browser costs a few hundred milliseconds for a 64px ASCII atlas. For big alphabets or large sizes, bake the atlas ahead of time with the CLI (uses [skia-canvas](https://github.com/samizdatco/skia-canvas), an optional dependency) and ship the image and metadata with your game:
 
 ```sh
+# after npm install @excaliburjs/plugin-sdf-text
 npx ex-generate-sdf ./fonts/PixelifySans-Regular.ttf PixelifySans ./public/pixelfont 64
 #  writes ./public/pixelfont.png and ./public/pixelfont.json
 ```
+
+Or one-off without adding it to your game's dependencies (`--package` tells `npx` which package provides the command):
+
+```sh
+npx --package @excaliburjs/plugin-sdf-text ex-generate-sdf ./fonts/PixelifySans-Regular.ttf PixelifySans ./public/pixelfont 64
+```
+
+```
+ex-generate-sdf <font-file> <font-family> <out-name> [font-size=64] [alphabet-start-hex=20 alphabet-end-hex=7E]
+```
+
+The CLI ships as type-stripped ESM and needs Node 24 or newer (it is not bundled into the library); the library itself is a prebuilt ESM bundle and runs anywhere your game does.
 
 ```typescript
 const pixel = new SDFAtlas({ atlasPath: '/pixelfont.png', metadataPath: '/pixelfont.json' });

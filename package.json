@@ -32,18 +32,21 @@
   "sideEffects": false,
   "files": [
     "dist",
-    "cli.ts",
     "readme.md"
   ],
+  "engines": {
+    "node": ">=24"
+  },
   "bin": {
-    "ex-generate-sdf": "./cli.ts"
+    "ex-generate-sdf": "./dist/cli.js"
   },
   "scripts": {
     "start": "vite",
-    "build": "npm run build:lib && npm run build:min && npm run build:types",
+    "build": "npm run build:lib && npm run build:min && npm run build:types && npm run build:cli",
     "build:lib": "vite build",
     "build:min": "vite build --mode min",
     "build:types": "tsc --project tsconfig.build.json",
+    "build:cli": "esbuild cli.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/cli.js",
     "type-check": "tsc --noEmit",
     "test": "node test/smoke.mjs"
   },
@@ -58,6 +61,7 @@
   },
   "devDependencies": {
     "@types/node": "^25.1.0",
+    "esbuild": "^0.27.7",
     "excalibur": "1.0.0",
     "playwright": "1.64.1",
     "typescript": "5.9.3",
