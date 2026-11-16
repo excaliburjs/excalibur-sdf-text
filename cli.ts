@@ -1,75 +1,48 @@
 #!/usr/bin/env node
-
+// Generates an SDF atlas (png + json) from a font file, headless with skia-canvas.
+// Usage: ex-generate-sdf <font-file> <font-family> <out-name> [font-size] [alphabet-start-hex alphabet-end-hex]
 import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { Canvas, FontLibrary, ImageData } from 'skia-canvas';
+import TinySDF from '@mapbox/tiny-sdf';
+import { SDFFont } from './src/sdf-font.ts';
 
-import { Canvas, FontLibrary, ImageData } from 'skia-canvas'
-import TinySDF from "@mapbox/tiny-sdf";
-import { SDFFont } from './sdf-font.ts';
-import type { SDFGlyph } from './sdf-font.ts';
-
-export class TinySDFHeadless extends TinySDF {
+class TinySDFHeadless extends TinySDF {
   /**
-   * Overrids the built in canvas creation to the Skia canvas for headless
+   * Overrides the built in canvas creation to use the skia canvas for headless generation
    */
   _createCanvas(size: number) {
     return new Canvas(size, size);
   }
 }
 
-const args = process.argv;
-const cwd = process.cwd;
-// TODO better arg parsing please commander.js?
-// https://github.com/tj/commander.js
-const fontFile = args[2];
-const fontFamily = args[3]
-const outname = args[4];
+const [fontFile, fontFamily, outName, fontSizeArg, startHex, endHex] = process.argv.slice(2);
+if (!fontFile || !fontFamily || !outName) {
+  console.error('Usage: ex-generate-sdf <font-file> <font-family> <out-name> [font-size=64] [alphabet-start-hex=20 alphabet-end-hex=7E]');
+  process.exit(1);
+}
+const fontSize = fontSizeArg ? Number(fontSizeArg) : 64;
+const alphabet: [number, number] = [parseInt(startHex ?? '20', 16), parseInt(endHex ?? '7E', 16)];
 
 const sdfFont = new SDFFont({
-  fontFile: fontFile, //'./static/PixelifySans-Regular.ttf',
-  fontFamily: fontFamily,
-  alphabet: [[0x0020, 0x00FF]],
-  fontWeight: 100,
-  fontSize: 100,
-
+  fontFile,
+  fontFamily,
+  alphabet: [alphabet],
+  fontSize,
   canvasProvider: (width, height) => new Canvas(width, height) as unknown as HTMLCanvasElement,
   sdfProvider: (options) => new TinySDFHeadless(options),
-  fontSourceLoader: async (font, family) => { FontLibrary.use(family, [font]) },
-  imageDataProvider: (width, height) => new ImageData(width, height),
+  fontSourceLoader: async (file, family) => {
+    FontLibrary.use(family, [file]);
+  },
+  imageDataProvider: (width, height) => new ImageData(width, height)
 });
 
 await sdfFont.load();
 
-// Tust me this exists on skia cnavas
-const outAtlasFile = `./${outname}.png`;
-(sdfFont.atlas as any).toFileSync(outAtlasFile);
-
-let output: {
-  atlas: string,
-  color: string,
-  alphabet: string,
-  fontSize: number,
-  buffer: number,
-  halo: number,
-  gamma: number,
-  glyphs: Record<string, Omit<SDFGlyph, 'data'>>
-} = {
-  atlas: outAtlasFile,
-  color: sdfFont.color.toHex(),
-  fontSize: sdfFont.fontSize,
-  buffer: sdfFont.buffer,
-  alphabet: sdfFont.alphabet,
-  halo: sdfFont.halo,
-  gamma: sdfFont.gamma,
-  glyphs: {}
-};
-
-for (const [codePoint, glyph] of sdfFont.glyphs) {
-  output.glyphs[codePoint] = {
-    ...glyph,
-  }
-  delete (output.glyphs[codePoint] as any).data
-}
-
-const fileOutput = JSON.stringify(output, null, 2);
-fs.writeFileSync(`./${outname}.json`, fileOutput);
-
+const atlasFile = `${outName}.png`;
+const metadataFile = `${outName}.json`;
+// skia-canvas's Canvas has toFileSync, it is not on the DOM type
+(sdfFont.atlas as any).toFileSync(atlasFile);
+const metadata = sdfFont.toMetadata('./' + path.basename(atlasFile));
+fs.writeFileSync(metadataFile, JSON.stringify(metadata, null, 2));
+console.log(`wrote ${atlasFile} (${sdfFont.atlas.width}x${sdfFont.atlas.height}, ${sdfFont.glyphs.size} glyphs) and ${metadataFile}`);

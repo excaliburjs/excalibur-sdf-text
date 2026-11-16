@@ -1,33 +1,69 @@
 {
-  "name": "@excaliburjs/sdf-text",
-  "version": "0.33.0",
-  "description": "SDF Text Rendering and Atlas Generation",
+  "name": "@excaliburjs/plugin-sdf-text",
+  "version": "1.0.0",
+  "description": "Signed distance field text rendering for the Excalibur game engine: a custom WebGL renderer plugin plus atlas generation",
   "keywords": [
     "sdf",
     "text",
+    "font",
     "excalibur",
     "excaliburjs"
   ],
   "license": "BSD-2-Clause",
   "author": "Erik Onarheim",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/excaliburjs/excalibur-sdf-text.git"
+  },
+  "bugs": {
+    "url": "https://github.com/excaliburjs/excalibur-sdf-text/issues"
+  },
+  "homepage": "https://github.com/excaliburjs/excalibur-sdf-text#readme",
   "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "start": "vite",
-    "build": "tsc && vite build",
-    "serve": "vite preview",
-    "test": "npm run test"
+  "main": "dist/excalibur-sdf-text.js",
+  "module": "dist/excalibur-sdf-text.js",
+  "types": "dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/excalibur-sdf-text.js"
+    }
+  },
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "readme.md"
+  ],
+  "engines": {
+    "node": ">=24"
   },
   "bin": {
-    "ex-generate-sdf": "./cli.ts"
+    "ex-generate-sdf": "./dist/cli.js"
+  },
+  "scripts": {
+    "start": "vite",
+    "build": "npm run build:lib && npm run build:min && npm run build:types && npm run build:cli",
+    "build:lib": "vite build",
+    "build:min": "vite build --mode min",
+    "build:types": "tsc --project tsconfig.build.json",
+    "build:cli": "esbuild cli.ts --bundle --platform=node --format=esm --packages=external --outfile=dist/cli.js",
+    "type-check": "tsc --noEmit",
+    "test": "node test/smoke.mjs"
   },
   "dependencies": {
-    "@mapbox/tiny-sdf": "2.0.7",
-    "excalibur": "0.32.0",
+    "@mapbox/tiny-sdf": "2.0.7"
+  },
+  "peerDependencies": {
+    "excalibur": "^1.0.0"
+  },
+  "optionalDependencies": {
     "skia-canvas": "3.0.8"
   },
   "devDependencies": {
     "@types/node": "^25.1.0",
+    "esbuild": "^0.27.7",
+    "excalibur": "1.0.0",
+    "playwright": "1.64.1",
     "typescript": "5.9.3",
     "vite": "7.3.1"
   }
