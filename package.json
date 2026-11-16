@@ -1,6 +1,6 @@
 {
   "name": "@excaliburjs/plugin-sdf-text",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Signed distance field text rendering for the Excalibur game engine: a custom WebGL renderer plugin plus atlas generation",
   "keywords": [
     "sdf",
