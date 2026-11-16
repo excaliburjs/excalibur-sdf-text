@@ -6,6 +6,8 @@ Signed distance field text for [Excalibur](https://excaliburjs.com): one atlas, 
 
 Why SDF text? `ex.Text` rasterizes with the 2D canvas, which looks great at the size it was rasterized at and goes soft when scaled or zoomed. A distance field atlas is generated once (at load time or ahead of time with the CLI) and the fragment shader reconstructs a sharp edge at whatever size you draw. You lose the browser's text shaping (ligatures, multi-colored emoji, bold and italic synthesized per draw), you gain resolution independence, batching, and the same output on every OS.
 
+https://github.com/user-attachments/assets/1c915bb4-0c8e-49b8-896a-e4fe2332a638
+
 ## Install
 
 ```sh
